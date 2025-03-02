@@ -58,7 +58,7 @@ void sumWithMutex(int value, int& result)
     }
 }
 
-void elementDistribution(const int thread_id, int& result)
+void elementDistributionMutex(const int thread_id, int& result)
 {
     for(int i = thread_id; i < SIZE; i+= NUM_THREADS)
     {
@@ -72,7 +72,44 @@ void calculateSynchronizedXOR(int& result)
 
     for(int i = 0; i < NUM_THREADS; i++)
     {
-        threads[i] = std::thread(elementDistribution, i,std::ref(result));
+        threads[i] = std::thread(elementDistributionMutex, i,std::ref(result));
+    }
+
+    for(int i = 0; i < NUM_THREADS; i++)
+    {
+        threads[i].join();
+    }
+}
+
+void sumWithAtomic(int value, std::atomic<int>& result)
+{
+    int old_value, new_value;
+
+    if(value % 2 == 0)
+    {
+        do
+        {
+            old_value = result.load();
+            new_value = old_value ^ value;
+        }while(!result.compare_exchange_weak(old_value, new_value));
+    }
+}
+
+void elementDistributionAtomic(const int thread_id, std::atomic<int>& result)
+{
+    for(int i = thread_id; i < SIZE; i+= NUM_THREADS)
+    {
+        sumWithAtomic(array[i], result);
+    }
+}
+
+void calculateAtomicXOR(std::atomic<int>& result)
+{
+    std::thread threads[NUM_THREADS];
+
+    for(int i = 0; i < NUM_THREADS; i++)
+    {
+        threads[i] = std::thread(elementDistributionAtomic, i, std::ref(result));
     }
 
     for(int i = 0; i < NUM_THREADS; i++)
@@ -87,14 +124,18 @@ int main()
 
     int sequantial_xor_result = 0;
     int synchronized_xor_result = 0;
+    std::atomic<int> atomic_xor_result(0);
 
     fillArray();
     //printArray();
 
     calculateSequantialXOR(sequantial_xor_result);
     calculateSynchronizedXOR(synchronized_xor_result);
+    calculateAtomicXOR(atomic_xor_result);
+
     std::cout << sequantial_xor_result << std::endl;
     std::cout << synchronized_xor_result << std::endl;
+    std::cout << atomic_xor_result << std::endl;
 
     return 0;
 }
