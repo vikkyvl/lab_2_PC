@@ -3,15 +3,17 @@
 #include <ctime>
 #include <cstdlib>
 #include <thread>
+#include <mutex>
 #include <atomic>
 
-#define SIZE 6
+#define SIZE 1000
 #define NUM_THREADS 4
 
 #define MIN 1
 #define MAX 100
 
 int array[SIZE];
+std::mutex mtx;
 
 int getRandomNumber()
 {
@@ -46,17 +48,53 @@ void calculateSequantialXOR(int& result)
     }
 }
 
+void sumWithMutex(int value, int& result)
+{
+    if(value % 2 == 0)
+    {
+        mtx.lock(); //std::lock_guard<std::mutex> lock(mtx);
+        result ^= value;
+        mtx.unlock();
+    }
+}
+
+void elementDistribution(const int thread_id, int& result)
+{
+    for(int i = thread_id; i < SIZE; i+= NUM_THREADS)
+    {
+        sumWithMutex(array[i], result);
+    }
+}
+
+void calculateSynchronizedXOR(int& result)
+{
+    std::thread threads[NUM_THREADS];
+
+    for(int i = 0; i < NUM_THREADS; i++)
+    {
+        threads[i] = std::thread(elementDistribution, i,std::ref(result));
+    }
+
+    for(int i = 0; i < NUM_THREADS; i++)
+    {
+        threads[i].join();
+    }
+}
+
 int main()
 {
     srand(time(NULL));
 
     int sequantial_xor_result = 0;
+    int synchronized_xor_result = 0;
 
     fillArray();
     //printArray();
 
     calculateSequantialXOR(sequantial_xor_result);
-    //std::cout << sequantial_xor_result << std::endl;
+    calculateSynchronizedXOR(synchronized_xor_result);
+    std::cout << sequantial_xor_result << std::endl;
+    std::cout << synchronized_xor_result << std::endl;
 
     return 0;
 }
