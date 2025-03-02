@@ -1,19 +1,25 @@
 #include <iostream>
-#include <chrono>
 #include <ctime>
 #include <cstdlib>
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include "execution_time.h"
 
-#define SIZE 1000
+#define SIZE 100000000
 #define NUM_THREADS 4
-
 #define MIN 1
 #define MAX 100
 
 int array[SIZE];
+
 std::mutex mtx;
+
+int sequantial_xor_result = 0;
+int synchronized_xor_result = 0;
+std::atomic<int> atomic_xor_result(0);
+
+enum Method {MUTEX, ATOMIC};
 
 int getRandomNumber()
 {
@@ -37,51 +43,28 @@ void printArray()
     std::cout << std::endl;
 }
 
-void calculateSequantialXOR(int& result)
+void calculateSequantialXOR()
 {
     for(int i : array)
     {
         if((i % 2) == 0) //(i & 1)
         {
-            result ^= i;
+            sequantial_xor_result ^= i;
         }
     }
 }
 
-void sumWithMutex(int value, int& result)
+void sumWithMutex(int value)
 {
     if(value % 2 == 0)
     {
         mtx.lock(); //std::lock_guard<std::mutex> lock(mtx);
-        result ^= value;
+        synchronized_xor_result ^= value;
         mtx.unlock();
     }
 }
 
-void elementDistributionMutex(const int thread_id, int& result)
-{
-    for(int i = thread_id; i < SIZE; i+= NUM_THREADS)
-    {
-        sumWithMutex(array[i], result);
-    }
-}
-
-void calculateSynchronizedXOR(int& result)
-{
-    std::thread threads[NUM_THREADS];
-
-    for(int i = 0; i < NUM_THREADS; i++)
-    {
-        threads[i] = std::thread(elementDistributionMutex, i,std::ref(result));
-    }
-
-    for(int i = 0; i < NUM_THREADS; i++)
-    {
-        threads[i].join();
-    }
-}
-
-void sumWithAtomic(int value, std::atomic<int>& result)
+void sumWithAtomic(int value)
 {
     int old_value, new_value;
 
@@ -89,27 +72,34 @@ void sumWithAtomic(int value, std::atomic<int>& result)
     {
         do
         {
-            old_value = result.load();
+            old_value = atomic_xor_result.load();
             new_value = old_value ^ value;
-        }while(!result.compare_exchange_weak(old_value, new_value));
+        }while(!atomic_xor_result.compare_exchange_weak(old_value, new_value));
     }
 }
 
-void elementDistributionAtomic(const int thread_id, std::atomic<int>& result)
+void elementDistribution(const int thread_id, Method method)
 {
     for(int i = thread_id; i < SIZE; i+= NUM_THREADS)
     {
-        sumWithAtomic(array[i], result);
+        if (method == MUTEX)
+        {
+            sumWithMutex(array[i]);
+        }
+        else if (method == ATOMIC)
+        {
+            sumWithAtomic(array[i]);
+        }
     }
 }
 
-void calculateAtomicXOR(std::atomic<int>& result)
+void calculateXOR(Method method)
 {
     std::thread threads[NUM_THREADS];
 
     for(int i = 0; i < NUM_THREADS; i++)
     {
-        threads[i] = std::thread(elementDistributionAtomic, i, std::ref(result));
+        threads[i] = std::thread(elementDistribution, i, method);
     }
 
     for(int i = 0; i < NUM_THREADS; i++)
@@ -122,20 +112,30 @@ int main()
 {
     srand(time(NULL));
 
-    int sequantial_xor_result = 0;
-    int synchronized_xor_result = 0;
-    std::atomic<int> atomic_xor_result(0);
-
     fillArray();
     //printArray();
 
-    calculateSequantialXOR(sequantial_xor_result);
-    calculateSynchronizedXOR(synchronized_xor_result);
-    calculateAtomicXOR(atomic_xor_result);
+    std::cout << "\n* Sequential *" << std::endl;
+    {
+        ExecutionTime execution_time;
+        calculateSequantialXOR();
+    }
+    std::cout << "Calculation result: " << sequantial_xor_result << std::endl;
 
-    std::cout << sequantial_xor_result << std::endl;
-    std::cout << synchronized_xor_result << std::endl;
-    std::cout << atomic_xor_result << std::endl;
+    std::cout << "\n* Mutex *" << std::endl;
+    {
+        ExecutionTime execution_time;
+        calculateXOR(MUTEX);
+    }
+    std::cout << "Calculation result: " << synchronized_xor_result << std::endl;
+
+    std::cout << "\n* Atomic *" << std::endl;
+    {
+        ExecutionTime execution_time;
+        calculateXOR(ATOMIC);
+    }
+    std::cout << "Calculation result: " << atomic_xor_result << std::endl;
+
 
     return 0;
 }
