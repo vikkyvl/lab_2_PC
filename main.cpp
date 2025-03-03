@@ -115,6 +115,7 @@ int main()
     fillArray();
     //printArray();
 
+    std::cout << "\nArray size: " << SIZE << std::endl;
     std::cout << "\n* Sequential *" << std::endl;
     {
         ExecutionTime execution_time;
@@ -135,7 +136,6 @@ int main()
         calculateXOR(ATOMIC);
     }
     std::cout << "Calculation result: " << atomic_xor_result << std::endl;
-
 
     return 0;
 }
